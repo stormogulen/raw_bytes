@@ -1,0 +1,16 @@
+[package]
+name = "raw_bytes"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = "1.24.0"
+bytemuck_derive = "1.10.2"
+thiserror = { version = "2.0.17", optional = true }
+memmap2 = { version = "0.8", optional = true }
+tempfile = { version = "3.6", optional = true }
+
+[features]
+default = ["std"]
+std = ["thiserror", "tempfile"]
+mmap = ["std", "memmap2"]
