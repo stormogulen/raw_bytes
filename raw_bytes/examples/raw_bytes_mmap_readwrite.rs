@@ -1,4 +1,4 @@
-use raw_bytes::Container;
+//use raw_bytes::Container;
 //use bytemuck::Pod;
 use bytemuck_derive::Zeroable;
 use bytemuck_derive::Pod;
@@ -30,11 +30,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let path = Path::new("data_rw.bin");
         ensure_file(path, 10)?;
 
-        let mut c = Container::<Packet>::mmap_readwrite(path)?;
+        let mut c = raw_bytes::Container::<Packet>::mmap_readwrite(path)?;
         println!("len = {}", c.len());
 
         // write a value
-        c.write_value(0, Packet { id: 42, value: 99.9 })?;
+        c.write(0, Packet { id: 42, value: 99.9 })?;
         println!("first after write: {:?}", c.get(0)?);
     }
 

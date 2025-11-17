@@ -11,17 +11,17 @@ struct Packet {
 fn main() -> Result<(), ContainerError> {
     println!("=== In-Memory Example ===");
 
-    let mut c = Container::<Packet>::new_in_memory();
+    let mut c = Container::<Packet>::new();
 
     c.push(Packet { id: 1, value: 10.0 })?;
     c.push(Packet { id: 2, value: 20.0 })?;
     c.push(Packet { id: 3, value: 30.0 })?;
 
     println!("len = {}", c.len());
-    println!("first: {:?}", c.read_value(0)?);
+    println!("first: {:?}", c.get(0)?);
 
     for i in 0..c.len() {
-        println!("  [{}] {:?}", i, c.read_value(i)?);
+        println!("  [{}] {:?}", i, c.get(i)?);
     }
 
     Ok(())

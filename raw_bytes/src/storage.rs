@@ -157,7 +157,6 @@ impl<T: Pod> Storage<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use bytemuck::{Pod, Zeroable};
     use bytemuck_derive::Pod;
     use bytemuck_derive::Zeroable;
 
@@ -198,49 +197,46 @@ mod tests {
     #[cfg(feature = "mmap")]
     #[test]
     fn mmap_readonly_operations() {
-        use std::fs::File;
-        use tempfile::tempfile;
         use std::io::{Write, Seek, SeekFrom};
+        use tempfile::NamedTempFile;
 
         // create temp file with two Packets
-        let mut file = tempfile().unwrap();
+        let mut file = NamedTempFile::new().unwrap();
         let packets = [
             Packet { id: 1, value: 10.0 },
             Packet { id: 2, value: 20.0 },
         ];
         let bytes: &[u8] = bytemuck::cast_slice(&packets);
         file.write_all(bytes).unwrap();
-        file.seek(SeekFrom::Start(0)).unwrap();
+        file.flush().unwrap();
 
-        let path = file.into_temp_path();
-        let storage = Storage::<Packet>::from_mmap_readonly(&path).unwrap();
+        let storage = Storage::<Packet>::from_mmap_readonly(file.path()).unwrap();
         assert_eq!(storage.len(), 2);
 
         assert_eq!(storage.get(0).unwrap(), &packets[0]);
         assert_eq!(storage.get(1).unwrap(), &packets[1]);
 
         // get_mut should fail
+        let mut storage = storage;
         assert!(storage.get_mut(0).is_err());
     }
 
     #[cfg(feature = "mmap")]
     #[test]
     fn mmap_readwrite_operations() {
-        use std::fs::File;
-        use tempfile::tempfile;
         use std::io::{Write, Seek, SeekFrom};
+        use tempfile::NamedTempFile;
 
-        let mut file = tempfile().unwrap();
+        let mut file = NamedTempFile::new().unwrap();
         let packets = [
             Packet { id: 1, value: 10.0 },
             Packet { id: 2, value: 20.0 },
         ];
         let bytes: &[u8] = bytemuck::cast_slice(&packets);
         file.write_all(bytes).unwrap();
-        file.seek(SeekFrom::Start(0)).unwrap();
+        file.flush().unwrap();
 
-        let path = file.into_temp_path();
-        let mut storage = Storage::<Packet>::from_mmap_readwrite(&path).unwrap();
+        let mut storage = Storage::<Packet>::from_mmap_readwrite(file.path()).unwrap();
         assert_eq!(storage.len(), 2);
 
         // get
@@ -257,21 +253,19 @@ mod tests {
     fn push_error_for_mmap() {
         #[cfg(feature = "mmap")]
         {
-            use tempfile::tempfile;
+            use tempfile::NamedTempFile;
             use std::io::Write;
             use bytemuck::cast_slice;
 
-            let mut file = tempfile().unwrap();
+            let mut file = NamedTempFile::new().unwrap();
             let packets = [Packet { id: 1, value: 1.0 }];
             file.write_all(cast_slice(&packets)).unwrap();
-            file.sync_all().unwrap();
+            file.flush().unwrap();
 
-            let path = file.into_temp_path();
-
-            let mut ro = Storage::<Packet>::from_mmap_readonly(&path).unwrap();
+            let mut ro = Storage::<Packet>::from_mmap_readonly(file.path()).unwrap();
             assert!(ro.push(Packet { id: 2, value: 2.0 }).is_err());
 
-            let mut rw = Storage::<Packet>::from_mmap_readwrite(&path).unwrap();
+            let mut rw = Storage::<Packet>::from_mmap_readwrite(file.path()).unwrap();
             assert!(rw.push(Packet { id: 3, value: 3.0 }).is_err());
         }
     }

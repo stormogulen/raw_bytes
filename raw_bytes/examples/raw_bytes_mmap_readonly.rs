@@ -1,4 +1,4 @@
-use raw_bytes::Container;
+//use raw_bytes::Container;
 //use bytemuck::Pod;
 use bytemuck_derive::Zeroable;
 use bytemuck_derive::Pod;
@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let path = Path::new("data_readonly.bin");
         ensure_file(path, 10)?; // create file with space for 10 Packet elements
 
-        let c = Container::<Packet>::mmap_readonly(path)?;
+        let c = raw_bytes::Container::<Packet>::mmap_readonly(path)?;
         println!("len = {}", c.len());
         println!("first: {:?}", c.get(0)?);
     }
