@@ -1,5 +1,39 @@
-// src/container.rs - Updated to work with raw_bytes::Container
-
+//! Persistent bit-packed container with optional mmap support.
+//!
+//! # Examples
+//!
+//! ## Basic usage
+//!
+//! ```rust
+//! use packed_bits::PackedBitsContainer;
+//!
+//! let mut container = PackedBitsContainer::<7>::new_in_memory();
+//! container.push(100).unwrap();
+//! container.push(50).unwrap();
+//!
+//! assert_eq!(container.get(0), Some(100));
+//! assert_eq!(container.len(), 2);
+//! ```
+//!
+//! ## Persistence
+//!
+//! ```rust
+//! use packed_bits::PackedBitsContainer;
+//! use raw_bytes::Container;
+//!
+//! // Create and populate
+//! let mut container = PackedBitsContainer::<10>::new_in_memory();
+//! container.push(512).unwrap();
+//!
+//! // Save to bytes
+//! let bytes = container.storage().as_slice().to_vec();
+//!
+//! // Restore later
+//! let storage = Container::from_slice(&bytes);
+//! let restored = PackedBitsContainer::<10>::from_storage(storage).unwrap();
+//! assert_eq!(restored.get(0), Some(512));
+//! ```
+//! 
 use raw_bytes::Container;
 use crate::PackedBitsError;
 
@@ -18,6 +52,17 @@ pub struct PackedBitsContainer<const N: usize> {
 type Result<T> = core::result::Result<T, PackedBitsError>;
 
 impl<const N: usize> PackedBitsContainer<N> {
+
+    /// Creates a new in-memory container.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use packed_bits::PackedBitsContainer;
+    ///
+    /// let container = PackedBitsContainer::<8>::new_in_memory();
+    /// assert_eq!(container.len(), 0);
+    /// ```
     pub fn new_in_memory() -> Self {
         assert!(N > 0 && N <= 32, "N must be 1..=32");
         let mut storage = Container::from_slice(&vec![0u8; HEADER_SIZE]);
@@ -109,6 +154,21 @@ impl<const N: usize> PackedBitsContainer<N> {
         Ok(())
     }
 
+    /// Pushes a value that must fit in N bits.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value doesn't fit in N bits.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use packed_bits::PackedBitsContainer;
+    ///
+    /// let mut container = PackedBitsContainer::<4>::new_in_memory();
+    /// container.push(15).unwrap(); // 15 = 0b1111, fits in 4 bits
+    /// assert_eq!(container.get(0), Some(15));
+    /// ```
     pub fn push(&mut self, value: u32) -> Result<()> {
         let max_val = if N == 32 { u32::MAX } else { (1u32 << N) - 1 };
         assert!(value <= max_val, "value must fit in {} bits", N);

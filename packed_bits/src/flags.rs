@@ -1,4 +1,28 @@
-//! Flags container for bit flags
+//! Compact storage for sets of bit flags.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use packed_bits::FlagsContainer;
+//!
+//! const READ: u32 = 1 << 0;
+//! const WRITE: u32 = 1 << 1;
+//! const EXECUTE: u32 = 1 << 2;
+//!
+//! let mut perms = FlagsContainer::<3>::new_in_memory();
+//!
+//! // User has read+write
+//! perms.push(READ | WRITE).unwrap();
+//!
+//! // Check permissions
+//! assert!(perms.contains(0, READ));
+//! assert!(perms.contains(0, WRITE));
+//! assert!(!perms.contains(0, EXECUTE));
+//!
+//! // Grant execute permission
+//! perms.set_mask(0, EXECUTE).unwrap();
+//! assert!(perms.contains(0, EXECUTE));
+//! ```
 
 use crate::{PackedBitsContainer, PackedBitsError};
 
