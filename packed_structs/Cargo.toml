@@ -1,0 +1,21 @@
+[package]
+name = "packed_structs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = "1.24.0"
+bytemuck_derive = "1.10.2"
+thiserror = { version = "2.0.17", optional = true }
+
+# Depends on your raw_bytes crate for underlying storage
+raw_bytes = { version = "0.1", path = "../raw_bytes", default-features = false }
+
+[features]
+default = ["std", "container"]
+std = ["thiserror", "raw_bytes/std"]
+mmap = ["std", "raw_bytes/mmap"]
+container = []
+
+[dev-dependencies]
+proptest = "1.9.0"
