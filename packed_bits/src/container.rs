@@ -34,7 +34,7 @@
 //! assert_eq!(restored.get(0), Some(512));
 //! ```
 //! 
-use raw_bytes::Container;
+pub use raw_bytes::Container;
 use crate::PackedBitsError;
 
 #[cfg(not(feature = "std"))]

@@ -17,8 +17,9 @@ use std::ops::{Deref, DerefMut};
 ///
 /// # Example
 /// ```
-/// use packed_struct::PackedStructContainer;
+/// use packed_structs::PackedStructContainer;
 /// use bytemuck::{Pod, Zeroable};
+/// use bytemuck_derive::{Pod, Zeroable};
 ///
 /// #[repr(C)]
 /// #[derive(Clone, Copy, Pod, Zeroable)]
@@ -263,11 +264,15 @@ mod tests {
     use super::*;
 
     #[repr(C)]
-    #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     struct Point {
         x: f32,
         y: f32,
     }
+
+    // Safety: Point is repr(C) with only f32 fields, which are Pod
+    unsafe impl bytemuck::Zeroable for Point {}
+    unsafe impl bytemuck::Pod for Point {}
 
     #[test]
     fn test_new_and_push() {
