@@ -47,7 +47,11 @@
 pub mod prelude;
 pub mod builder;
 pub mod convert;
+pub mod iter;
 pub mod io;
+
+pub use crate::convert::{ToBytes, FromBytes, PackedConvert, batch, try_parse_iter, parse_with};
+pub use crate::iter::{iter_parse, SliceParseExt};
 
 // Re-export MTF types
 pub use mtf::{MTF, MTFType, MTFError};
@@ -85,3 +89,5 @@ pub use save::{
 
 // Re-export for convenience
 pub use bytemuck::{Pod, Zeroable};
+
+
