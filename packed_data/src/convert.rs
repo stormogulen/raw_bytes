@@ -39,23 +39,34 @@ impl<T: Pod> FromBytes<T> for [T] {
 
 /// Unified conversion trait for packed data
 pub trait PackedConvert: Sized {
+     /// Append this value to a byte buffer
     fn pack_into(&self, buffer: &mut Vec<u8>);
-    fn unpack_from(buffer: &[u8]) -> Option<Self>;
+
+    /// Unpack a value from the start of a buffer
+    fn unpack_prefix(buffer: &[u8]) -> Option<Self>;
+
+    /// Size in bytes when packed
+    fn packed_size() -> usize;
 }
 
 // Implement for Pod types automatically
 impl<T: Pod + Copy> PackedConvert for T {
     fn pack_into(&self, buffer: &mut Vec<u8>) {
-        let bytes = bytemuck::bytes_of(self);
-        buffer.extend_from_slice(bytes);
+        //let bytes = bytemuck::bytes_of(self);
+        //buffer.extend_from_slice(bytes);
+        buffer.extend_from_slice(bytemuck::bytes_of(self));
     }
 
-    fn unpack_from(buffer: &[u8]) -> Option<Self> {
-        if buffer.len() >= std::mem::size_of::<T>() {
-            Some(*bytemuck::from_bytes(&buffer[..std::mem::size_of::<T>()]))
-        } else {
-            None
+    fn unpack_prefix(buffer: &[u8]) -> Option<Self> {
+        let size = std::mem::size_of::<T>();
+        if buffer.len() < size {
+            return None;
         }
+        Some(*bytemuck::from_bytes(&buffer[..size]))
+    }
+
+    fn packed_size() -> usize {
+        std::mem::size_of::<T>()
     }
 }
 
@@ -136,7 +147,7 @@ where
 /// use packed_data::convert::parse_with;
 ///
 /// let bytes = vec![1u8, 0, 0, 0, 2, 0, 0, 0];
-/// let numbers: Vec<u32> = parse_with(&bytes, 4, |chunk| {
+/// let numbers: Vec<u32> = parse_with(&bytes, 4, |chunk| -> Result<u32, ()> {
 ///     Ok(u32::from_le_bytes(chunk.try_into().unwrap()))
 /// }).collect::<Result<Vec<_>, _>>().unwrap();
 ///
@@ -194,7 +205,7 @@ mod tests {
             3, 0, 0, 0, 4, 0, 0, 0,
         ];
         
-        let pairs: Vec<Pair> = try_parse_iter::<Pair, 8>(&bytes)
+        let pairs: Vec<Pair> = try_parse_iter::<Pair, _, 8>(&bytes)
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         

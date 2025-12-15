@@ -34,14 +34,20 @@ where
     from_fn(move || f())
 }
 
-/// Iterator that parses items with fallible conversion
-pub struct TryParseIter<'a, T, E> {
-    bytes: &'a [u8],
-    pos: usize,
-    _marker: PhantomData<(T, E)>,
+pub trait FixedSizeParse: Sized {
+    const SIZE: usize;
+    type Error;
+
+    fn parse(bytes: &[u8]) -> Result<Self, Self::Error>;
 }
 
-impl<'a, T, E> TryParseIter<'a, T, E> {
+pub struct FixedSizeParseIter<'a, T: FixedSizeParse> {
+    bytes: &'a [u8],
+    pos: usize,
+    _marker: PhantomData<T>,
+}
+
+impl<'a, T: FixedSizeParse> FixedSizeParseIter<'a, T> {
     pub fn new(bytes: &'a [u8]) -> Self {
         Self {
             bytes,
@@ -51,30 +57,55 @@ impl<'a, T, E> TryParseIter<'a, T, E> {
     }
 }
 
-impl<'a, T, E> Iterator for TryParseIter<'a, T, E>
-where
-    T: for<'b> TryFrom<&'b [u8], Error = E>,
-{
-    type Item = Result<T, E>;
+impl<'a, T: FixedSizeParse> Iterator for FixedSizeParseIter<'a, T> {
+    type Item = Result<T, T::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos >= self.bytes.len() {
+        if self.pos + T::SIZE > self.bytes.len() {
             return None;
         }
 
-        // Try to parse from remaining bytes
-        let result = T::try_from(&self.bytes[self.pos..]);
-        
-        match result {
-            Ok(item) => {
-                // Assume fixed size for now - could be made more sophisticated
-                self.pos += std::mem::size_of::<T>();
-                Some(Ok(item))
-            }
-            Err(e) => Some(Err(e)),
-        }
+        let chunk = &self.bytes[self.pos..self.pos + T::SIZE];
+        self.pos += T::SIZE;
+        Some(T::parse(chunk))
     }
 }
+
+
+// impl<'a, T, E> TryParseIter<'a, T, E> {
+//     pub fn new(bytes: &'a [u8]) -> Self {
+//         Self {
+//             bytes,
+//             pos: 0,
+//             _marker: PhantomData,
+//         }
+//     }
+// }
+
+// impl<'a, T, E> Iterator for TryParseIter<'a, T, E>
+// where
+//     T: for<'b> TryFrom<&'b [u8], Error = E>,
+// {
+//     type Item = Result<T, E>;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         if self.pos >= self.bytes.len() {
+//             return None;
+//         }
+
+//         // Try to parse from remaining bytes
+//         let result = T::try_from(&self.bytes[self.pos..]);
+        
+//         match result {
+//             Ok(item) => {
+//                 // Assume fixed size for now - could be made more sophisticated
+//                 self.pos += std::mem::size_of::<T>();
+//                 Some(Ok(item))
+//             }
+//             Err(e) => Some(Err(e)),
+//         }
+//     }
+// }
 
 /// Extension trait for slices to enable convenient parsing
 pub trait SliceParseExt {
