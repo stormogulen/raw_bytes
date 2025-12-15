@@ -45,8 +45,20 @@ unsafe impl<const N: usize, const F: usize> Pod for FixedSmall<N, F> {}
 
 impl<const N: usize, const F: usize> FixedSmall<N, F> {
     const SCALE: f32 = (1 << F) as f32;
-    const MAX_INT: i32 = (1 << (N - 1)) - 1;
-    const MIN_INT: i32 = -(1 << (N - 1));
+    //const MAX_INT: i32 = (1 << (N - 1)) - 1;
+    //const MIN_INT: i32 = -(1 << (N - 1));
+    // Handle the N=32 edge case properly
+    const MAX_INT: i32 = if N >= 32 {
+        i32::MAX
+    } else {
+        (1 << (N - 1)) - 1
+    };
+    
+    const MIN_INT: i32 = if N >= 32 {
+        i32::MIN
+    } else {
+        -(1 << (N - 1))
+    };
 
     /// Creates a fixed-point number from an f32 value.
     ///
@@ -69,9 +81,9 @@ impl<const N: usize, const F: usize> FixedSmall<N, F> {
     /// ```
     pub fn from_f32(value: f32) -> Result<Self, FixedPointError> {
         let scaled = value * Self::SCALE;
-        let raw = scaled.round() as i32;
-        
-        if raw > Self::MAX_INT || raw < Self::MIN_INT {
+    
+        // Check bounds before casting to i32
+        if scaled < Self::MIN_INT as f32 || scaled > Self::MAX_INT as f32 {
             return Err(FixedPointError::Overflow {
                 value,
                 bits: N,
@@ -79,6 +91,7 @@ impl<const N: usize, const F: usize> FixedSmall<N, F> {
             });
         }
         
+        let raw = scaled.round() as i32;
         Ok(Self { raw })
     }
 
