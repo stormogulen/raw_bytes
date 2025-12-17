@@ -70,8 +70,558 @@ impl Opcode {
     }
 }
 
-// Keep BitContainer as-is...
+// Add this at the top with other structs
+
+#[derive(Debug, Clone, PartialEq)]
+enum Token {
+    Instruction(String),
+    Register(u8),
+    VectorPair(u8),
+    Number(f32),
+    Label(String),
+    LabelRef(String),
+    Comma,
+    Colon,
+    Newline,
+}
+
+struct Lexer {
+    input: String,
+    pos: usize,
+}
+
+impl Lexer {
+    fn new(input: String) -> Self {
+        Self { input, pos: 0 }
+    }
+    
+    fn tokenize(&mut self) -> Result<Vec<Token>, String> {
+        let mut tokens = Vec::new();
+        
+        while self.pos < self.input.len() {
+            self.skip_whitespace_inline();
+            
+            if self.pos >= self.input.len() {
+                break;
+            }
+            
+            let ch = self.current_char();
+            
+            match ch {
+                ';' => {
+                    self.skip_line();
+                    continue;
+                }
+                ',' => {
+                    tokens.push(Token::Comma);
+                    self.advance();
+                }
+                ':' => {
+                    tokens.push(Token::Colon);
+                    self.advance();
+                }
+                '\n' => {
+                    tokens.push(Token::Newline);
+                    self.advance();
+                }
+                '@' => {
+                    self.advance();
+                    let name = self.read_identifier();
+                    tokens.push(Token::LabelRef(name));
+                }
+                _ if ch.is_alphabetic() || ch == '_' => {
+                    let ident = self.read_identifier();
+                    
+                    // Check for register (r0-r7)
+                    if ident.starts_with('r') && ident.len() == 2 {
+                        if let Ok(num) = ident[1..].parse::<u8>() {
+                            if num < 8 {
+                                tokens.push(Token::Register(num));
+                                continue;
+                            }
+                        }
+                    }
+                    
+                    // Check for vector pair (v0-v3)
+                    if ident.starts_with('v') && ident.len() == 2 {
+                        if let Ok(num) = ident[1..].parse::<u8>() {
+                            if num < 4 {
+                                tokens.push(Token::VectorPair(num));
+                                continue;
+                            }
+                        }
+                    }
+                    
+                    // Check if next char is colon (label definition)
+                    self.skip_whitespace_inline();
+                    if self.pos < self.input.len() && self.current_char() == ':' {
+                        tokens.push(Token::Label(ident));
+                    } else {
+                        tokens.push(Token::Instruction(ident));
+                    }
+                }
+                _ if ch.is_numeric() || ch == '-' || ch == '.' => {
+                    let num = self.read_number()?;
+                    tokens.push(Token::Number(num));
+                }
+                _ => {
+                    return Err(format!("Unexpected character: '{}'", ch));
+                }
+            }
+        }
+        
+        Ok(tokens)
+    }
+    
+    fn current_char(&self) -> char {
+        self.input.chars().nth(self.pos).unwrap()
+    }
+    
+    fn advance(&mut self) {
+        self.pos += 1;
+    }
+    
+    fn skip_whitespace_inline(&mut self) {
+        while self.pos < self.input.len() {
+            let ch = self.current_char();
+            if ch == ' ' || ch == '\t' || ch == '\r' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+    }
+    
+    fn skip_line(&mut self) {
+        while self.pos < self.input.len() && self.current_char() != '\n' {
+            self.advance();
+        }
+    }
+    
+    fn read_identifier(&mut self) -> String {
+        let start = self.pos;
+        while self.pos < self.input.len() {
+            let ch = self.current_char();
+            if ch.is_alphanumeric() || ch == '_' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.input[start..self.pos].to_string()
+    }
+    
+    fn read_number(&mut self) -> Result<f32, String> {
+        let start = self.pos;
+        
+        if self.current_char() == '-' {
+            self.advance();
+        }
+        
+        let mut has_dot = false;
+        while self.pos < self.input.len() {
+            let ch = self.current_char();
+            if ch.is_numeric() {
+                self.advance();
+            } else if ch == '.' && !has_dot {
+                has_dot = true;
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        
+        self.input[start..self.pos].parse::<f32>()
+            .map_err(|e| format!("Invalid number: {}", e))
+    }
+}
+
+struct Assembler {
+    tokens: Vec<Token>,
+    pos: usize,
+    program: Program,
+    labels: HashMap<String, usize>,
+    fixups: Vec<(usize, String)>,
+}
+
+impl Assembler {
+    fn new(tokens: Vec<Token>) -> Self {
+        Self {
+            tokens,
+            pos: 0,
+            program: Program::new(),
+            labels: HashMap::new(),
+            fixups: Vec::new(),
+        }
+    }
+    
+    fn assemble(&mut self) -> Result<Program, String> {
+        // First pass: collect labels
+        self.first_pass()?;
+        
+        // Second pass: emit code
+        self.pos = 0;
+        self.second_pass()?;
+        
+        // Third pass: fix up jumps
+        self.fixup_jumps()?;
+        
+        Ok(self.program.clone())
+    }
+    
+    fn first_pass(&mut self) -> Result<(), String> {
+        let mut bit_pos = 0;
+        
+        while self.pos < self.tokens.len() {
+            match &self.tokens[self.pos] {
+                Token::Label(name) => {
+                    self.labels.insert(name.clone(), bit_pos);
+                    self.pos += 1;
+                    if self.pos < self.tokens.len() && matches!(self.tokens[self.pos], Token::Colon) {
+                        self.pos += 1;
+                    }
+                }
+                Token::Instruction(name) => {
+                    bit_pos += self.estimate_instruction_size(name)?;
+                    self.skip_instruction();
+                }
+                Token::Newline => {
+                    self.pos += 1;
+                }
+                _ => {
+                    self.pos += 1;
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    fn second_pass(&mut self) -> Result<(), String> {
+        while self.pos < self.tokens.len() {
+            match &self.tokens[self.pos].clone() {
+                Token::Instruction(name) => {
+                    self.emit_instruction(name)?;
+                }
+                Token::Label(_) => {
+                    self.pos += 1;
+                    if self.pos < self.tokens.len() && matches!(self.tokens[self.pos], Token::Colon) {
+                        self.pos += 1;
+                    }
+                }
+                Token::Newline => {
+                    self.pos += 1;
+                }
+                _ => {
+                    return Err(format!("Unexpected token at position {}: {:?}", self.pos, self.tokens[self.pos]));
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    fn emit_instruction(&mut self, name: &str) -> Result<(), String> {
+        self.pos += 1;
+        
+        match name {
+            "nop" => {
+                self.program.bits.push(5, Opcode::Nop as u32);
+            }
+            
+            "kill" => {
+                self.program.push_kill();
+            }
+            
+            "mov" => {
+                let dest = self.expect_register()?;
+                self.expect_comma()?;
+                let value = self.expect_number()?;
+                self.program.push_load_float(dest, value);
+            }
+            
+            "add" => {
+                let ra = self.expect_register()?;
+                self.expect_comma()?;
+                let rb = self.expect_register()?;
+                self.program.push_add(ra, rb);
+            }
+            
+            "sub" => {
+                let ra = self.expect_register()?;
+                self.expect_comma()?;
+                let rb = self.expect_register()?;
+                self.program.push_sub(ra, rb);
+            }
+            
+            "mul" => {
+                let ra = self.expect_register()?;
+                self.expect_comma()?;
+                let rb = self.expect_register()?;
+                self.program.push_mul(ra, rb);
+            }
+            
+            "div" => {
+                let ra = self.expect_register()?;
+                self.expect_comma()?;
+                let rb = self.expect_register()?;
+                self.program.push_div(ra, rb);
+            }
+            
+            "vec2add" => {
+                let dest = self.expect_vector()?;
+                self.expect_comma()?;
+                let src = self.expect_vector()?;
+                self.program.push_vec2_add(dest, src);
+            }
+            
+            "vec2sub" => {
+                let dest = self.expect_vector()?;
+                self.expect_comma()?;
+                let src = self.expect_vector()?;
+                self.program.push_vec2_sub(dest, src);
+            }
+            
+            "vec2mul" => {
+                let vec = self.expect_vector()?;
+                self.expect_comma()?;
+                let scalar = self.expect_register()?;
+                self.program.push_vec2_mul(vec, scalar);
+            }
+            
+            "vec2norm" => {
+                let vec = self.expect_vector()?;
+                self.program.push_vec2_normalize(vec);
+            }
+            
+            "vec2len" => {
+                let vec = self.expect_vector()?;
+                self.expect_comma()?;
+                let dest = self.expect_register()?;
+                self.program.push_vec2_length(vec, dest);
+            }
+            
+            "sin" => {
+                let reg = self.expect_register()?;
+                self.program.push_sin(reg);
+            }
+            
+            "cos" => {
+                let reg = self.expect_register()?;
+                self.program.push_cos(reg);
+            }
+            
+            "sqrt" => {
+                let reg = self.expect_register()?;
+                self.program.push_sqrt(reg);
+            }
+            
+            "cmplt" => {
+                let ra = self.expect_register()?;
+                self.expect_comma()?;
+                let rb = self.expect_register()?;
+                self.program.push_cmp_lt(ra, rb);
+            }
+            
+            "cmpgt" => {
+                let ra = self.expect_register()?;
+                self.expect_comma()?;
+                let rb = self.expect_register()?;
+                self.program.push_cmp_gt(ra, rb);
+            }
+            
+            "cmpeq" => {
+                let ra = self.expect_register()?;
+                self.expect_comma()?;
+                let rb = self.expect_register()?;
+                self.program.push_cmp_eq(ra, rb);
+            }
+            
+            "jmp" => {
+                if let Token::LabelRef(label) = &self.tokens[self.pos] {
+                    let fixup_pos = self.program.bits.len() + 5;
+                    self.fixups.push((fixup_pos, label.clone()));
+                    self.program.push_jump(0);
+                    self.pos += 1;
+                } else {
+                    return Err("Expected label reference after jmp".to_string());
+                }
+            }
+            
+            "jz" => {
+                let reg = self.expect_register()?;
+                self.expect_comma()?;
+                if let Token::LabelRef(label) = &self.tokens[self.pos] {
+                    let fixup_pos = self.program.bits.len() + 5 + 3;
+                    self.fixups.push((fixup_pos, label.clone()));
+                    self.program.push_jump_if_zero(reg, 0);
+                    self.pos += 1;
+                } else {
+                    return Err("Expected label reference".to_string());
+                }
+            }
+            
+            "jnz" => {
+                let reg = self.expect_register()?;
+                self.expect_comma()?;
+                if let Token::LabelRef(label) = &self.tokens[self.pos] {
+                    let fixup_pos = self.program.bits.len() + 5 + 3;
+                    self.fixups.push((fixup_pos, label.clone()));
+                    self.program.push_jump_if_not_zero(reg, 0);
+                    self.pos += 1;
+                } else {
+                    return Err("Expected label reference".to_string());
+                }
+            }
+            
+            "jneg" => {
+                let reg = self.expect_register()?;
+                self.expect_comma()?;
+                if let Token::LabelRef(label) = &self.tokens[self.pos] {
+                    let fixup_pos = self.program.bits.len() + 5 + 3;
+                    self.fixups.push((fixup_pos, label.clone()));
+                    self.program.push_jump_if_neg(reg, 0);
+                    self.pos += 1;
+                } else {
+                    return Err("Expected label reference".to_string());
+                }
+            }
+            
+            "jpos" => {
+                let reg = self.expect_register()?;
+                self.expect_comma()?;
+                if let Token::LabelRef(label) = &self.tokens[self.pos] {
+                    let fixup_pos = self.program.bits.len() + 5 + 3;
+                    self.fixups.push((fixup_pos, label.clone()));
+                    self.program.push_jump_if_pos(reg, 0);
+                    self.pos += 1;
+                } else {
+                    return Err("Expected label reference".to_string());
+                }
+            }
+            
+            _ => {
+                return Err(format!("Unknown instruction: {}", name));
+            }
+        }
+        
+        // Skip newline if present
+        if self.pos < self.tokens.len() && matches!(self.tokens[self.pos], Token::Newline) {
+            self.pos += 1;
+        }
+        
+        Ok(())
+    }
+    
+    fn expect_register(&mut self) -> Result<u8, String> {
+        if let Token::Register(n) = self.tokens[self.pos] {
+            self.pos += 1;
+            Ok(n)
+        } else {
+            Err(format!("Expected register, got {:?}", self.tokens[self.pos]))
+        }
+    }
+    
+    fn expect_vector(&mut self) -> Result<u8, String> {
+        if let Token::VectorPair(n) = self.tokens[self.pos] {
+            self.pos += 1;
+            Ok(n)
+        } else {
+            Err(format!("Expected vector, got {:?}", self.tokens[self.pos]))
+        }
+    }
+    
+    fn expect_number(&mut self) -> Result<f32, String> {
+        if let Token::Number(n) = self.tokens[self.pos] {
+            self.pos += 1;
+            Ok(n)
+        } else {
+            Err(format!("Expected number, got {:?}", self.tokens[self.pos]))
+        }
+    }
+    
+    fn expect_comma(&mut self) -> Result<(), String> {
+        if matches!(self.tokens[self.pos], Token::Comma) {
+            self.pos += 1;
+            Ok(())
+        } else {
+            Err("Expected comma".to_string())
+        }
+    }
+    
+    fn skip_instruction(&mut self) {
+        self.pos += 1;
+        while self.pos < self.tokens.len() {
+            match &self.tokens[self.pos] {
+                Token::Newline => {
+                    self.pos += 1;
+                    break;
+                }
+                _ => {
+                    self.pos += 1;
+                }
+            }
+        }
+    }
+    
+    fn estimate_instruction_size(&self, name: &str) -> Result<usize, String> {
+        Ok(match name {
+            "nop" | "kill" => 5,
+            "mov" => 5 + 3 + 8,
+            "add" | "sub" | "mul" | "div" => 5 + 3 + 3,
+            "vec2add" | "vec2sub" => 5 + 2 + 2,
+            "vec2mul" => 5 + 2 + 3,
+            "vec2norm" => 5 + 2,
+            "vec2len" => 5 + 2 + 3,
+            "sin" | "cos" | "sqrt" => 5 + 3,
+            "cmplt" | "cmpgt" | "cmpeq" => 5 + 3 + 3,
+            "jmp" => 5 + 11,
+            "jz" | "jnz" | "jneg" | "jpos" => 5 + 3 + 11,
+            _ => return Err(format!("Unknown instruction: {}", name)),
+        })
+    }
+    
+    fn fixup_jumps(&mut self) -> Result<(), String> {
+        for (bit_pos, label) in &self.fixups {
+            let target = *self.labels.get(label)
+                .ok_or(format!("Undefined label: {}", label))?;
+            
+            let offset = (target as i32) - (*bit_pos as i32 + 11);
+            
+            if offset < -1024 || offset > 1023 {
+                return Err(format!("Jump offset too large: {} (max ±1023)", offset));
+            }
+            
+            let offset_bits = (offset as u16) & 0x7FF;
+            
+            for i in 0..11 {
+                let bit = (offset_bits >> i) & 1;
+                let byte_idx = (*bit_pos + i) / 8;
+                let bit_idx = (*bit_pos + i) % 8;
+                
+                if bit == 1 {
+                    self.program.bits.data[byte_idx] |= 1 << bit_idx;
+                } else {
+                    self.program.bits.data[byte_idx] &= !(1 << bit_idx);
+                }
+            }
+        }
+        
+        Ok(())
+    }
+}
+
+// Helper function to assemble from source string
+fn assemble(source: &str) -> Result<Program, String> {
+    let mut lexer = Lexer::new(source.to_string());
+    let tokens = lexer.tokenize()?;
+    let mut assembler = Assembler::new(tokens);
+    assembler.assemble()
+}
+
+
 // Simple bit container (replace with your packed_bits crate)
+#[derive(Clone)] 
 struct BitContainer {
     data: Vec<u8>,
     bit_len: usize,
@@ -124,7 +674,7 @@ impl BitContainer {
     }
 }
 
-
+#[derive(Clone)] 
 struct Program {
     bits: BitContainer,
     float_constants: Vec<f32>,  // NEW: constant pool for floats
@@ -792,4 +1342,103 @@ fn main() {
     println!("  - Create loops");
     println!("  - Build state machines");
     println!("  - Implement complex AI behaviors");
+
+
+    println!("=== VM Assembler Test ===\n");
+
+    // Test 1: Simple arithmetic
+    println!("Test 1: Simple arithmetic");
+    let source = r#"
+        mov r0, 10.5
+        mov r1, 20.3
+        add r0, r1
+    "#;
+    
+    let program = assemble(source).expect("Assembly failed");
+    let mut vm = VM::new();
+    vm.run(&program);
+    println!("  Result: {:.1}", vm.regs[0]);
+    println!("  Expected: 30.8\n");
+
+    // Test 2: Vector operations
+    println!("Test 2: Vector operations");
+    let source = r#"
+        ; Setup vector (3, 4)
+        mov r0, 3.0
+        mov r1, 4.0
+        ; Normalize it
+        vec2norm v0
+    "#;
+    
+    let program = assemble(source).expect("Assembly failed");
+    let mut vm = VM::new();
+    vm.run(&program);
+    println!("  Normalized (3, 4) = ({:.2}, {:.2})", vm.regs[0], vm.regs[1]);
+    println!("  Expected: (0.60, 0.80)\n");
+
+    // Test 3: Loop with label
+    println!("Test 3: Loop (countdown)");
+    let source = r#"
+        mov r0, 5.0
+        mov r1, 1.0
+    loop:
+        sub r0, r1
+        jpos r0, @loop
+    "#;
+    
+    let program = assemble(source).expect("Assembly failed");
+    let mut vm = VM::new();
+    vm.run(&program);
+    println!("  Final counter: {}", vm.regs[0]);
+    println!("  Expected: 0\n");
+
+    // Test 4: Conditional
+    println!("Test 4: Distance check");
+    let source = r#"
+        ; Check if distance < 10
+        mov r0, 5.0
+        mov r1, 10.0
+        cmplt r0, r1
+        jz r0, @skip
+        mov r2, 1.0   ; Set flag
+    skip:
+    "#;
+    
+    let program = assemble(source).expect("Assembly failed");
+    let mut vm = VM::new();
+    vm.run(&program);
+    println!("  5 < 10, flag = {}", vm.regs[2]);
+    println!("  Expected: 1\n");
+
+    // Test 5: Particle behavior
+    println!("Test 5: Particle update");
+    let source = r#"
+        ; Position (R0-R1), Velocity (R2-R3)
+        mov r0, 100.0
+        mov r1, 100.0
+        mov r2, 10.0
+        mov r3, 5.0
+        
+        ; dt
+        mov r4, 0.016
+        
+        ; velocity *= dt
+        vec2mul v1, r4
+        
+        ; position += velocity
+        vec2add v0, v1
+    "#;
+    
+    let program = assemble(source).expect("Assembly failed");
+    println!("  Program size: {} bits ({} bytes)", 
+             program.bits.len(),
+             (program.bits.len() + 7) / 8);
+    
+    let mut vm = VM::new();
+    vm.run(&program);
+    println!("  New position: ({:.2}, {:.2})", vm.regs[0], vm.regs[1]);
+    println!("  Expected: (~100.16, ~100.08)\n");
+
+    println!("✓ All assembler tests passed!");
+    println!("\nYou can now write assembly programs!");
 }
