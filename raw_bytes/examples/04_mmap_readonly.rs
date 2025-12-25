@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Attempting to modify will fail (commented out to avoid panic)
         // c.write(0, Record { timestamp: 9999, sensor_id: 99, value: 99.9 })?; // ERROR!
 
-        println!("\n✓ Read-only access works correctly");
+        println!("\nRead-only access works correctly");
 
         // Cleanup
         std::fs::remove_file(path)?;

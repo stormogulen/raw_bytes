@@ -107,12 +107,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Find top scorer
         if let Some(top) = c.as_slice().iter().max_by_key(|s| s.score) {
             println!(
-                "\n🏆 Top scorer: Player {} with {} points!",
+                "\nTop scorer: Player {} with {} points!",
                 top.player_id, top.score
             );
         }
 
-        println!("\n✓ Changes persisted to file!");
+        println!("\nChanges persisted to file!");
 
         // Note: Cannot push to mmap storage
         // c.push(GameScore { player_id: 5, score: 0, level: 1, flags: 0 })?; // ERROR!
