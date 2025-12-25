@@ -6,7 +6,7 @@
 //! use packed_bits::PackedBitsContainer;
 //!
 //! // Store 12-bit values (0-4095)
-//! let mut container = PackedBitsContainer::<12>::new_in_memory();
+//! let mut container = PackedBitsContainer::<12>::new_in_memory().expect("Failed to create container");
 //! container.push(0xABC).unwrap();
 //! container.push(0x123).unwrap();
 //!
@@ -23,7 +23,7 @@
 //! let standard: Vec<u32> = (0..1000).collect();
 //!
 //! // PackedBitsContainer<10>: 1000 elements × 10 bits = 1250 bytes
-//! let mut packed = PackedBitsContainer::<10>::new_in_memory();
+//! let mut packed = PackedBitsContainer::<10>::new_in_memory().expect("Failed to create container");
 //! for i in 0..1000 {
 //!     packed.push(i % 1024).unwrap(); // values 0-1023 fit in 10 bits
 //! }

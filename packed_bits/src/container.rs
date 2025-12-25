@@ -7,7 +7,7 @@
 //! ```rust
 //! use packed_bits::PackedBitsContainer;
 //!
-//! let mut container = PackedBitsContainer::<7>::new_in_memory();
+//! let mut container = PackedBitsContainer::<7>::new_in_memory().expect("failed to create container");
 //! container.push(100).unwrap();
 //! container.push(50).unwrap();
 //!
@@ -22,7 +22,7 @@
 //! use raw_bytes::Container;
 //!
 //! // Create and populate
-//! let mut container = PackedBitsContainer::<10>::new_in_memory();
+//! let mut container = PackedBitsContainer::<10>::new_in_memory().expect("Failed to create container");
 //! container.push(512).unwrap();
 //!
 //! // Save to bytes
@@ -49,7 +49,17 @@ pub struct PackedBitsContainer<const N: usize> {
     len: usize,
 }
 
-type Result<T> = core::result::Result<T, PackedBitsError>;
+type Result<T, PackedBitsError> = core::result::Result<T, PackedBitsError>;
+
+/// Validates the bit width N.
+    #[inline(always)]
+    fn validate_n<const N: usize>() -> Result<(), PackedBitsError> {
+        if (1..=32).contains(&N) {
+            Ok(())
+        } else {
+            Err(PackedBitsError::InvalidBitWidth(N))
+        }
+    }
 
 impl<const N: usize> PackedBitsContainer<N> {
 
@@ -60,27 +70,30 @@ impl<const N: usize> PackedBitsContainer<N> {
     /// ```
     /// use packed_bits::PackedBitsContainer;
     ///
-    /// let container = PackedBitsContainer::<8>::new_in_memory();
+    /// let container = PackedBitsContainer::<8>::new_in_memory().expect("failed to create container");
     /// assert_eq!(container.len(), 0);
     /// ```
-    pub fn new_in_memory() -> Self {
-        assert!(N > 0 && N <= 32, "N must be 1..=32");
+    pub fn new_in_memory() -> Result<Self, PackedBitsError> {
+        //assert!(N > 0 && N <= 32, "N must be 1..=32");
+        validate_n::<N>()?;
         let mut storage = Container::from_slice(&vec![0u8; HEADER_SIZE]);
         Self::write_header(&mut storage, 0).expect("failed to write header");
-        Self { storage, len: 0 }
+        Ok(Self { storage, len: 0 })
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
-        assert!(N > 0 && N <= 32, "N must be 1..=32");
+    pub fn with_capacity(capacity: usize) -> Result<Self, PackedBitsError> {
+        //assert!(N > 0 && N <= 32, "N must be 1..=32");
+        validate_n::<N>()?;
         let data_bytes = (capacity * N).div_ceil(8);
         let total_bytes = HEADER_SIZE + data_bytes;
         let mut storage = Container::from_slice(&vec![0u8; total_bytes]);
         Self::write_header(&mut storage, 0).expect("failed to write header");
-        Self { storage, len: 0 }
+        Ok(Self { storage, len: 0 })
     }
 
-    pub fn from_storage(storage: Container<u8>) -> Result<Self> {
-        assert!(N > 0 && N <= 32, "N must be 1..=32");
+    pub fn from_storage(storage: Container<u8>) -> Result<Self, PackedBitsError> {
+        //assert!(N > 0 && N <= 32, "N must be 1..=32");
+        validate_n::<N>()?;
         if storage.len() < HEADER_SIZE {
             return Err(PackedBitsError::StorageTooSmall);
         }
@@ -104,7 +117,7 @@ impl<const N: usize> PackedBitsContainer<N> {
         Self { storage, len: len_elements }
     }
 
-    fn write_header(storage: &mut Container<u8>, len: usize) -> Result<()> {
+    fn write_header(storage: &mut Container<u8>, len: usize) -> Result<(), PackedBitsError> {
         let slice = storage.as_slice();
         if slice.len() < HEADER_SIZE {
             return Err(PackedBitsError::StorageTooSmall);
@@ -124,7 +137,7 @@ impl<const N: usize> PackedBitsContainer<N> {
         Ok(())
     }
 
-    fn update_len_in_header(&mut self) -> Result<()> {
+    fn update_len_in_header(&mut self) -> Result<(), PackedBitsError> {
         let len_bytes = (self.len as u32).to_le_bytes();
         for i in 0..4 {
             self.storage[8 + i] = len_bytes[i];
@@ -140,7 +153,7 @@ impl<const N: usize> PackedBitsContainer<N> {
         &mut self.storage
     }
 
-    fn ensure_capacity(&mut self, total_bits: usize) -> Result<()> {
+    fn ensure_capacity(&mut self, total_bits: usize) -> Result<(), PackedBitsError> {
         let required_bytes = HEADER_SIZE + total_bits.div_ceil(8);
         let current_len = self.storage.len();
         
@@ -165,11 +178,11 @@ impl<const N: usize> PackedBitsContainer<N> {
     /// ```
     /// use packed_bits::PackedBitsContainer;
     ///
-    /// let mut container = PackedBitsContainer::<4>::new_in_memory();
+    /// let mut container = PackedBitsContainer::<4>::new_in_memory().expect("failed to create container");
     /// container.push(15).unwrap(); // 15 = 0b1111, fits in 4 bits
     /// assert_eq!(container.get(0), Some(15));
     /// ```
-    pub fn push(&mut self, value: u32) -> Result<()> {
+    pub fn push(&mut self, value: u32) -> Result<(), PackedBitsError> {
         let max_val = if N == 32 { u32::MAX } else { (1u32 << N) - 1 };
         assert!(value <= max_val, "value must fit in {} bits", N);
         let bit_pos = self.len * N;
@@ -215,7 +228,7 @@ impl<const N: usize> PackedBitsContainer<N> {
         Some((val & mask) as u32)
     }
 
-    pub fn set(&mut self, index: usize, value: u32) -> Result<()> {
+    pub fn set(&mut self, index: usize, value: u32) -> Result<(), PackedBitsError> {
         assert!(index < self.len, "index out of bounds");
         let max_val = if N == 32 { u32::MAX } else { (1u32 << N) - 1 };
         assert!(value <= max_val, "value must fit in {} bits", N);
@@ -257,7 +270,7 @@ impl<const N: usize> PackedBitsContainer<N> {
     }
 
 
-    pub fn clear(&mut self) -> Result<()> {
+    pub fn clear(&mut self) -> Result<(), PackedBitsError> {
         self.len = 0;
         // Recreate storage with just the header
         self.storage = Container::from_slice(&vec![0u8; HEADER_SIZE]);
@@ -312,8 +325,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn basic_in_memory() {
-        let mut pb = PackedBitsContainer::<12>::new_in_memory();
+    fn basic_in_memory() -> Result<(), PackedBitsError> {
+        let mut pb = PackedBitsContainer::<12>::new_in_memory()?;
         pb.push(0xABC).unwrap();
         pb.push(0x123).unwrap();
         pb.push(0xFFF).unwrap();
@@ -333,11 +346,13 @@ mod tests {
         assert_eq!(collected, alloc::vec![0xABC, 0x456, 0xFFF]);
         #[cfg(feature = "std")]
         assert_eq!(collected, vec![0xABC, 0x456, 0xFFF]);
+
+        Ok(())
     }
 
     #[test]
-    fn test_header_persistence() {
-        let mut pb = PackedBitsContainer::<7>::new_in_memory();
+    fn test_header_persistence() -> Result<(), PackedBitsError> {
+        let mut pb = PackedBitsContainer::<7>::new_in_memory()?;
         pb.push(100).unwrap();
         pb.push(50).unwrap();
         let bytes = pb.storage().as_slice().to_vec();
@@ -346,46 +361,56 @@ mod tests {
         assert_eq!(pb2.len(), 2);
         assert_eq!(pb2.get(0), Some(100));
         assert_eq!(pb2.get(1), Some(50));
+
+        Ok(())
     }
 
     #[test]
-    fn test_n32() {
-        let mut pb = PackedBitsContainer::<32>::new_in_memory();
+    fn test_n32() -> Result<(), PackedBitsError> {
+        let mut pb = PackedBitsContainer::<32>::new_in_memory()?;
         pb.push(u32::MAX).unwrap();
         pb.push(12345).unwrap();
         assert_eq!(pb.get(0), Some(u32::MAX));
         assert_eq!(pb.get(1), Some(12345));
+
+        Ok(())
     }
 
     #[test]
-    fn test_clear() {
-        let mut pb = PackedBitsContainer::<5>::new_in_memory();
+    fn test_clear() -> Result<(), Box<dyn std::error::Error>> {
+        let mut pb = PackedBitsContainer::<5>::new_in_memory()?;
         pb.push(10).unwrap();
         pb.push(20).unwrap();
         assert_eq!(pb.len(), 2);
         pb.clear().unwrap();
         assert_eq!(pb.len(), 0);
         assert!(pb.is_empty());
+
+        Ok(())
     }
 
     #[test]
-    fn test_with_capacity() {
-        let mut pb = PackedBitsContainer::<8>::with_capacity(100);
+    fn test_with_capacity() -> Result<(), PackedBitsError> {
+        let mut pb = PackedBitsContainer::<8>::with_capacity(100)?;
         assert!(pb.capacity() >= 100);
         assert_eq!(pb.len(), 0);
         for i in 0..50 {
             pb.push(i as u32).unwrap();
         }
         assert_eq!(pb.len(), 50);
+
+        Ok(())
     }
 
     #[test]
-    fn test_wrong_n() {
-        let mut pb = PackedBitsContainer::<7>::new_in_memory();
+    fn test_wrong_n() -> Result<(), PackedBitsError> {
+        let mut pb = PackedBitsContainer::<7>::new_in_memory()?;
         pb.push(100).unwrap();
         let bytes = pb.storage().as_slice().to_vec();
         let storage = Container::from_slice(&bytes);
         let result = PackedBitsContainer::<12>::from_storage(storage);
         assert!(matches!(result, Err(PackedBitsError::InvalidN { expected: 12, found: 7 })));
+
+        Ok(())
     }
 }

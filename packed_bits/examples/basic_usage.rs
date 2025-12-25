@@ -4,19 +4,19 @@ fn main() {
     println!("=== Packed Bits Examples ===\n");
 
     // Example 1: Storing small integers
-    example_small_integers();
+    let _ = example_small_integers();
 
     // Example 2: Flag permissions
-    example_permissions();
+    let _ =example_permissions();
 
     // Example 3: Memory comparison
-    example_memory_savings();
+    let _ = example_memory_savings();
 }
 
-fn example_small_integers() {
+fn example_small_integers() -> Result<(), packed_bits::PackedBitsError> {
     println!("Example 1: Storing RGB color indices (5 bits each)");
     
-    let mut colors = PackedBitsContainer::<5>::new_in_memory();
+    let mut colors = PackedBitsContainer::<5>::new_in_memory()?;
     
     // Store palette indices (0-31)
     colors.push(15).unwrap(); // Red shade
@@ -28,6 +28,8 @@ fn example_small_integers() {
     println!("  Color 1: {}", colors.get(1).unwrap());
     println!("  Color 2: {}", colors.get(2).unwrap());
     println!();
+
+    Ok(())
 }
 
 fn example_permissions() {
@@ -37,7 +39,7 @@ fn example_permissions() {
     const WRITE: u32 = 1 << 1;
     const EXECUTE: u32 = 1 << 2;
     
-    let mut perms = FlagsContainer::<3>::new_in_memory();
+    let mut perms = FlagsContainer::<3>::new_in_memory().unwrap();
     
     // File 0: read-only
     perms.push(READ).unwrap();
@@ -60,7 +62,7 @@ fn example_permissions() {
     println!();
 }
 
-fn example_memory_savings() {
+fn example_memory_savings() -> Result<(), packed_bits::PackedBitsError> {
     println!("Example 3: Memory savings comparison");
     
     let count = 10_000;
@@ -69,7 +71,7 @@ fn example_memory_savings() {
     let standard_bytes = count * 4;
     
     // PackedBitsContainer<12> (values 0-4095)
-    let mut packed = PackedBitsContainer::<12>::new_in_memory();
+    let mut packed = PackedBitsContainer::<12>::new_in_memory()?;
     for i in 0..count {
         packed.push(i % 4096).unwrap();
     }
@@ -81,4 +83,6 @@ fn example_memory_savings() {
     println!("  Vec<u32>: {} bytes", standard_bytes);
     println!("  Packed:   {} bytes", packed_bytes);
     println!("  Savings:  {:.1}%", savings);
+
+    Ok(())
 }

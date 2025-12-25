@@ -9,7 +9,7 @@
 //! const WRITE: u32 = 1 << 1;
 //! const EXECUTE: u32 = 1 << 2;
 //!
-//! let mut perms = FlagsContainer::<3>::new_in_memory();
+//! let mut perms = FlagsContainer::<3>::new_in_memory().expect("Failed to create container");
 //!
 //! // User has read+write
 //! perms.push(READ | WRITE).unwrap();
@@ -34,16 +34,18 @@ pub struct FlagsContainer<const N: usize> {
 }
 
 impl<const N: usize> FlagsContainer<N> {
-    pub fn new_in_memory() -> Self {
-        Self { bits: PackedBitsContainer::<N>::new_in_memory() }
+    pub fn new_in_memory() -> Result<Self> {
+        Ok(Self { bits: PackedBitsContainer::<N>::new_in_memory()? })
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self { bits: PackedBitsContainer::<N>::with_capacity(capacity) }
+    pub fn with_capacity(capacity: usize) -> Result<Self> {
+        Ok(Self { bits: PackedBitsContainer::<N>::with_capacity(capacity)? })
     }
 
     pub fn push(&mut self, flags: u32) -> Result<()> {
-        self.bits.push(flags)
+        self.bits.push(flags)?;
+        Ok(())
+        //Ok(Self { bits: PackedBitsContainer::push(flags)? })
     }
 
     pub fn contains(&self, index: usize, mask: u32) -> bool {
@@ -141,7 +143,7 @@ mod tests {
 
     #[test]
     fn basic_flags_ops() -> Result<()> {
-        let mut fc = FlagsContainer::<3>::new_in_memory();
+        let mut fc = FlagsContainer::<3>::new_in_memory().unwrap();
         fc.push(FLAG0 | FLAG2)?;
         fc.push(FLAG1)?;
         assert!(fc.contains(0, FLAG0));
@@ -153,7 +155,7 @@ mod tests {
 
     #[test]
     fn iter_flags_works() -> Result<()> {
-        let mut fc = FlagsContainer::<3>::new_in_memory();
+        let mut fc = FlagsContainer::<3>::new_in_memory().unwrap();
         fc.push(FLAG0 | FLAG2)?;
         fc.push(FLAG1)?;
         
