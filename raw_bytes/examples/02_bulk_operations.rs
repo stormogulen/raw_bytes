@@ -1,7 +1,7 @@
 //! Demonstrating bulk operations and capacity management
 
-use raw_bytes::{Container, ContainerError};
 use bytemuck_derive::{Pod, Zeroable};
+use raw_bytes::{Container, ContainerError};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
@@ -15,7 +15,10 @@ fn main() -> Result<(), ContainerError> {
 
     // Pre-allocate capacity for better performance
     let c = Container::<Point>::with_capacity(1000);
-    println!("Created container with capacity for 1000 points {}", c.len());
+    println!(
+        "Created container with capacity for 1000 points {}",
+        c.len()
+    );
 
     // Create from slice
     let initial_points = vec![
@@ -27,10 +30,7 @@ fn main() -> Result<(), ContainerError> {
     println!("\nCreated container from {} points", c2.len());
 
     // Extend with more data
-    let more_points = vec![
-        Point { x: 3.0, y: 3.0 },
-        Point { x: 4.0, y: 4.0 },
-    ];
+    let more_points = vec![Point { x: 3.0, y: 3.0 }, Point { x: 4.0, y: 4.0 }];
     c2.extend_from_slice(&more_points)?;
     println!("Extended to {} points", c2.len());
 

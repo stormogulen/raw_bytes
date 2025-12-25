@@ -7,7 +7,7 @@ use tempfile::NamedTempFile;
 
 use raw_bytes::Container;
 
-use std::io::{Write};
+use std::io::Write;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]

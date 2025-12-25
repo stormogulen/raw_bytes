@@ -1,5 +1,5 @@
-use raw_bytes::{Container, ContainerError};
 use bytemuck_derive::{Pod, Zeroable};
+use raw_bytes::{Container, ContainerError};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]

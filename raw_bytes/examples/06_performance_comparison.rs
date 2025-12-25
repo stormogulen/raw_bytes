@@ -1,7 +1,7 @@
 //! Compare different access patterns
 
-use raw_bytes::Container;
 use bytemuck_derive::{Pod, Zeroable};
+use raw_bytes::Container;
 use std::time::Instant;
 
 #[repr(C)]
@@ -16,7 +16,7 @@ fn main() {
     println!("=== Performance Comparison ===\n");
 
     const N: usize = 1_000_000;
-    
+
     // Create test data
     println!("Creating {} data points...", N);
     let mut c = Container::<DataPoint>::with_capacity(N);
@@ -25,7 +25,8 @@ fn main() {
             x: i as f64,
             y: (i * 2) as f64,
             z: (i * 3) as f64,
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     // Method 1: Individual get() calls
@@ -44,7 +45,7 @@ fn main() {
     let time2 = start.elapsed();
     println!("\nUsing iterator: {:?}", time2);
     println!("  Sum: {}", sum2);
-    
+
     // Method 3: Direct slice access
     let start = Instant::now();
     let sum3: f64 = c.as_slice().iter().map(|p| p.x).sum();
@@ -53,8 +54,12 @@ fn main() {
     println!("  Sum: {}", sum3);
 
     println!("\nPerformance gains:");
-    println!("  Iterator vs get(): {:.2}x faster", 
-        time1.as_secs_f64() / time2.as_secs_f64());
-    println!("  Slice vs get(): {:.2}x faster", 
-        time1.as_secs_f64() / time3.as_secs_f64());
+    println!(
+        "  Iterator vs get(): {:.2}x faster",
+        time1.as_secs_f64() / time2.as_secs_f64()
+    );
+    println!(
+        "  Slice vs get(): {:.2}x faster",
+        time1.as_secs_f64() / time3.as_secs_f64()
+    );
 }

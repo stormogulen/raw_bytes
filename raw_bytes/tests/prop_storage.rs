@@ -14,8 +14,7 @@ struct Packet {
 
 // Strategy for generating arbitrary Packets
 fn packet_strategy() -> impl Strategy<Value = Packet> {
-    (any::<u32>(), any::<f32>())
-        .prop_map(|(id, value)| Packet { id, value })
+    (any::<u32>(), any::<f32>()).prop_map(|(id, value)| Packet { id, value })
 }
 
 proptest! {
