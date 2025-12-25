@@ -186,7 +186,10 @@ mod tests {
         // get
         assert_eq!(storage.get(0).unwrap(), &p1);
         assert_eq!(storage.get(1).unwrap(), &p2);
-        assert!(matches!(storage.get(2), Err(ContainerError::OutOfBounds(2))));
+        assert!(matches!(
+            storage.get(2),
+            Err(ContainerError::OutOfBounds(2))
+        ));
 
         // get_mut
         let mut_ref = storage.get_mut(0).unwrap();
@@ -197,15 +200,12 @@ mod tests {
     #[cfg(feature = "mmap")]
     #[test]
     fn mmap_readonly_operations() {
-        use std::io::{Write, Seek, SeekFrom};
+        use std::io::{Seek, SeekFrom, Write};
         use tempfile::NamedTempFile;
 
         // create temp file with two Packets
         let mut file = NamedTempFile::new().unwrap();
-        let packets = [
-            Packet { id: 1, value: 10.0 },
-            Packet { id: 2, value: 20.0 },
-        ];
+        let packets = [Packet { id: 1, value: 10.0 }, Packet { id: 2, value: 20.0 }];
         let bytes: &[u8] = bytemuck::cast_slice(&packets);
         file.write_all(bytes).unwrap();
         file.flush().unwrap();
@@ -224,14 +224,11 @@ mod tests {
     #[cfg(feature = "mmap")]
     #[test]
     fn mmap_readwrite_operations() {
-        use std::io::{Write, Seek, SeekFrom};
+        use std::io::{Seek, SeekFrom, Write};
         use tempfile::NamedTempFile;
 
         let mut file = NamedTempFile::new().unwrap();
-        let packets = [
-            Packet { id: 1, value: 10.0 },
-            Packet { id: 2, value: 20.0 },
-        ];
+        let packets = [Packet { id: 1, value: 10.0 }, Packet { id: 2, value: 20.0 }];
         let bytes: &[u8] = bytemuck::cast_slice(&packets);
         file.write_all(bytes).unwrap();
         file.flush().unwrap();
@@ -253,9 +250,9 @@ mod tests {
     fn push_error_for_mmap() {
         #[cfg(feature = "mmap")]
         {
-            use tempfile::NamedTempFile;
-            use std::io::Write;
             use bytemuck::cast_slice;
+            use std::io::Write;
+            use tempfile::NamedTempFile;
 
             let mut file = NamedTempFile::new().unwrap();
             let packets = [Packet { id: 1, value: 1.0 }];

@@ -4,10 +4,10 @@
 extern crate alloc;
 
 #[cfg(feature = "std")]
-pub use std::{vec::Vec, string::String};
+pub use std::{string::String, vec::Vec};
 
 #[cfg(not(feature = "std"))]
-pub use alloc::{vec::Vec, string::String};
+pub use alloc::{string::String, vec::Vec};
 
 pub mod container;
 pub mod error;

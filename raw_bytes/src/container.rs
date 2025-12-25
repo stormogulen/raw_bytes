@@ -1,5 +1,5 @@
-use bytemuck::Pod;
 use crate::{ContainerError, Storage};
+use bytemuck::Pod;
 
 /// High-level container for typed elements backed by different storage mechanisms.
 ///
@@ -183,7 +183,6 @@ impl<T: Pod> Container<T> {
         }
     }
 
-    
     /// Opens a memory-mapped file for read-only access.
     ///
     /// This provides fast, zero-copy access to large datasets stored on disk.
@@ -323,7 +322,6 @@ impl<T: Pod> Container<T> {
         self.storage.is_empty()
     }
 
-    
     /// Returns a reference to the element at the given index.
     ///
     /// # Errors
@@ -352,7 +350,6 @@ impl<T: Pod> Container<T> {
         self.storage.get(index)
     }
 
-    
     /// Returns a mutable reference to the element at the given index.
     ///
     /// Only available for in-memory containers and read-write memory-mapped files.
@@ -382,7 +379,6 @@ impl<T: Pod> Container<T> {
         self.storage.get_mut(index)
     }
 
-    
     /// Writes a value to the element at the given index.
     ///
     /// This is a convenience method equivalent to `*container.get_mut(index)? = value`.
@@ -413,7 +409,6 @@ impl<T: Pod> Container<T> {
         Ok(())
     }
 
-    
     /// Appends an element to the back of the container.
     ///
     /// Only available for in-memory containers.
@@ -503,7 +498,6 @@ impl<T: Pod> Container<T> {
         }
     }
 
-    
     /// Returns an immutable slice view of all elements.
     ///
     /// This is the most efficient way to iterate over elements.
@@ -573,7 +567,6 @@ impl<T: Pod> Container<T> {
         }
     }
 
-    
     /// Returns an iterator over elements.
     ///
     /// # Examples
@@ -686,9 +679,9 @@ mod tests {
             Packet { id: 2, value: 20.0 },
             Packet { id: 3, value: 30.0 },
         ];
-        
+
         let c = Container::<Packet>::from_slice(&data);
-        
+
         let slice = c.as_slice();
         assert_eq!(slice.len(), 3);
         assert_eq!(slice[1].id, 2);
@@ -696,13 +689,10 @@ mod tests {
 
     #[test]
     fn iterator_operations() {
-        let data = vec![
-            Packet { id: 1, value: 10.0 },
-            Packet { id: 2, value: 20.0 },
-        ];
-        
+        let data = vec![Packet { id: 1, value: 10.0 }, Packet { id: 2, value: 20.0 }];
+
         let c = Container::<Packet>::from_slice(&data);
-        
+
         let sum: f32 = c.iter().map(|p| p.value).sum();
         assert_eq!(sum, 30.0);
     }
@@ -710,17 +700,14 @@ mod tests {
     #[test]
     fn extend_and_reserve() -> Result<(), ContainerError> {
         let mut c = Container::<Packet>::with_capacity(10);
-        
+
         c.push(Packet { id: 1, value: 10.0 })?;
-        
-        c.extend_from_slice(&[
-            Packet { id: 2, value: 20.0 },
-            Packet { id: 3, value: 30.0 },
-        ])?;
-        
+
+        c.extend_from_slice(&[Packet { id: 2, value: 20.0 }, Packet { id: 3, value: 30.0 }])?;
+
         assert_eq!(c.len(), 3);
         c.reserve(10)?;
-        
+
         Ok(())
     }
 
@@ -730,12 +717,12 @@ mod tests {
             Packet { id: 1, value: 10.0 },
             Packet { id: 2, value: 20.0 },
         ]);
-        
+
         assert_eq!(c.len(), 2);
         c.clear()?;
         assert_eq!(c.len(), 0);
         assert!(c.is_empty());
-        
+
         Ok(())
     }
 
@@ -746,10 +733,7 @@ mod tests {
         use tempfile::NamedTempFile;
 
         let mut file = NamedTempFile::new()?;
-        let packets = [
-            Packet { id: 1, value: 10.0 },
-            Packet { id: 2, value: 20.0 },
-        ];
+        let packets = [Packet { id: 1, value: 10.0 }, Packet { id: 2, value: 20.0 }];
         let bytes: &[u8] = bytemuck::cast_slice(&packets);
         file.write_all(bytes)?;
         file.flush()?;
@@ -759,7 +743,16 @@ mod tests {
         assert_eq!(c.get(0)?, &packets[0]);
 
         // These should all fail on readonly
-        assert!(c.write(0, Packet { id: 99, value: 99.0 }).is_err());
+        assert!(
+            c.write(
+                0,
+                Packet {
+                    id: 99,
+                    value: 99.0
+                }
+            )
+            .is_err()
+        );
         assert!(c.get_mut(0).is_err());
         assert!(c.as_mut_slice().is_err());
 
@@ -773,10 +766,7 @@ mod tests {
         use tempfile::NamedTempFile;
 
         let mut file = NamedTempFile::new()?;
-        let packets = [
-            Packet { id: 1, value: 10.0 },
-            Packet { id: 2, value: 20.0 },
-        ];
+        let packets = [Packet { id: 1, value: 10.0 }, Packet { id: 2, value: 20.0 }];
         let bytes: &[u8] = bytemuck::cast_slice(&packets);
         file.write_all(bytes)?;
         file.flush()?;
@@ -788,7 +778,13 @@ mod tests {
         assert_eq!(c.get(0)?, &packets[0]);
 
         // Can write
-        c.write(0, Packet { id: 99, value: 99.0 })?;
+        c.write(
+            0,
+            Packet {
+                id: 99,
+                value: 99.0,
+            },
+        )?;
         assert_eq!(c.get(0)?.id, 99);
 
         // Can get mutable slice
