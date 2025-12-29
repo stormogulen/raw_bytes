@@ -137,21 +137,30 @@ impl<T: Pod> Storage<T> {
         }
     }
 
-    // --- Mmap constructors -------------------------------------------------
+    //  Mmap constructors 
 
     #[cfg(feature = "mmap")]
     pub fn from_mmap_readonly(path: &Path) -> Result<Self, ContainerError> {
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
+        let elem_size = core::mem::size_of::<T>();
+        if mmap.len() % elem_size != 0 {
+            return Err(ContainerError::InvalidFileSize { /* ... */ });
+        }
         Ok(Storage::MmapReadOnly(mmap))
     }
 
     #[cfg(feature = "mmap")]
     pub fn from_mmap_readwrite(path: &Path) -> Result<Self, ContainerError> {
         let file = File::options().read(true).write(true).open(path)?;
+        let elem_size = core::mem::size_of::<T>();
+        if mmap.len() % elem_size != 0 {
+            return Err(ContainerError::InvalidFileSize { /* ... */ });
+        }
         let mmap = unsafe { MmapMut::map_mut(&file)? };
         Ok(Storage::MmapReadWrite(mmap))
     }
+
 }
 
 #[cfg(test)]

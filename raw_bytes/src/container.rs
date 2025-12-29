@@ -225,6 +225,12 @@ impl<T: Pod> Container<T> {
     #[cfg(feature = "mmap")]
     pub fn mmap_readonly<P: AsRef<std::path::Path>>(path: P) -> Result<Self, ContainerError> {
         let storage = Storage::from_mmap_readonly(path.as_ref())?;
+
+        // Validate that we can actually cast this memory
+        if let Storage::MmapReadOnly(ref m) = storage {
+            validate_mmap_layout::<T>(m.as_ref())?;
+        }
+
         Ok(Container { storage })
     }
 
@@ -273,7 +279,30 @@ impl<T: Pod> Container<T> {
     #[cfg(feature = "mmap")]
     pub fn mmap_readwrite<P: AsRef<std::path::Path>>(path: P) -> Result<Self, ContainerError> {
         let storage = Storage::from_mmap_readwrite(path.as_ref())?;
+
+        // Validate that we can cast this memory to T
+        if let Storage::MmapReadOnly(ref m) = storage {
+            validate_mmap_layout::<T>(m.as_ref())?;
+        }
+
         Ok(Container { storage })
+    }
+
+    /// Validates that the mmap bytes can be safely cast to `T`.
+    #[cfg(feature = "mmap")]
+    fn validate_mmap_layout<T: Pod>(bytes: &[u8]) -> Result<(), ContainerError> {
+        bytemuck::try_cast_slice::<u8, T>(bytes)
+            .map(|_| ())
+            .map_err(|e| {
+                #[cfg(feature = "std")]
+                return ContainerError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Invalid mmap layout for type {}: {:?}", 
+                            core::any::type_name::<T>(), e)
+                ));
+                #[cfg(not(feature = "std"))]
+                return ContainerError::Io("Invalid mmap layout");
+            })
     }
 
     /// Returns the number of elements in the container.
@@ -525,19 +554,21 @@ impl<T: Pod> Container<T> {
         match &self.storage {
             Storage::InMemory(vec) => vec.as_slice(),
             #[cfg(feature = "mmap")]
-            Storage::MmapReadOnly(m) => unsafe {
-                core::slice::from_raw_parts(
-                    m.as_ptr() as *const T,
-                    m.len() / core::mem::size_of::<T>(),
-                )
-            },
+            Storage::MmapReadOnly(m) => bytemuck::cast_slice(m.as_ref()),
+            // Storage::MmapReadOnly(m) => unsafe {
+            //     core::slice::from_raw_parts(
+            //         m.as_ptr() as *const T,
+            //         m.len() / core::mem::size_of::<T>(),
+            //     )
+            // },
             #[cfg(feature = "mmap")]
-            Storage::MmapReadWrite(m) => unsafe {
-                core::slice::from_raw_parts(
-                    m.as_ptr() as *const T,
-                    m.len() / core::mem::size_of::<T>(),
-                )
-            },
+            Storage::MmapReadOnly(m) => bytemuck::cast_slice(m.as_ref()),
+            // Storage::MmapReadWrite(m) => unsafe {
+            //     core::slice::from_raw_parts(
+            //         m.as_ptr() as *const T,
+            //         m.len() / core::mem::size_of::<T>(),
+            //     )
+            // },
         }
     }
 
@@ -558,12 +589,13 @@ impl<T: Pod> Container<T> {
                 ));
             }
             #[cfg(feature = "mmap")]
-            Storage::MmapReadWrite(m) => unsafe {
-                Ok(core::slice::from_raw_parts_mut(
-                    m.as_mut_ptr() as *mut T,
-                    m.len() / core::mem::size_of::<T>(),
-                ))
-            },
+            Storage::MmapReadWrite(m) => Ok(bytemuck::cast_slice_mut(m.as_mut())),
+            // Storage::MmapReadWrite(m) => unsafe {
+            //     Ok(core::slice::from_raw_parts_mut(
+            //         m.as_mut_ptr() as *mut T,
+            //         m.len() / core::mem::size_of::<T>(),
+            //     ))
+            // },
         }
     }
 
