@@ -281,7 +281,7 @@ impl<T: Pod> Container<T> {
         let storage = Storage::from_mmap_readwrite(path.as_ref())?;
 
         // Validate that we can cast this memory to T
-        if let Storage::MmapReadOnly(ref m) = storage {
+        if let Storage::MmapReadWrite(ref m) = storage {
             validate_mmap_layout::<T>(m.as_ref())?;
         }
 
@@ -553,22 +553,12 @@ impl<T: Pod> Container<T> {
     pub fn as_slice(&self) -> &[T] {
         match &self.storage {
             Storage::InMemory(vec) => vec.as_slice(),
+
             #[cfg(feature = "mmap")]
             Storage::MmapReadOnly(m) => bytemuck::cast_slice(m.as_ref()),
-            // Storage::MmapReadOnly(m) => unsafe {
-            //     core::slice::from_raw_parts(
-            //         m.as_ptr() as *const T,
-            //         m.len() / core::mem::size_of::<T>(),
-            //     )
-            // },
+            
             #[cfg(feature = "mmap")]
-            Storage::MmapReadOnly(m) => bytemuck::cast_slice(m.as_ref()),
-            // Storage::MmapReadWrite(m) => unsafe {
-            //     core::slice::from_raw_parts(
-            //         m.as_ptr() as *const T,
-            //         m.len() / core::mem::size_of::<T>(),
-            //     )
-            // },
+            Storage::MmapReadWrite(m) => bytemuck::cast_slice(m.as_ref()),
         }
     }
 
@@ -590,12 +580,6 @@ impl<T: Pod> Container<T> {
             }
             #[cfg(feature = "mmap")]
             Storage::MmapReadWrite(m) => Ok(bytemuck::cast_slice_mut(m.as_mut())),
-            // Storage::MmapReadWrite(m) => unsafe {
-            //     Ok(core::slice::from_raw_parts_mut(
-            //         m.as_mut_ptr() as *mut T,
-            //         m.len() / core::mem::size_of::<T>(),
-            //     ))
-            // },
         }
     }
 
